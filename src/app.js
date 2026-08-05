@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 const passport = require("./config/passport");
 const authRoutes = require("./routes/authRoutes");
+const fileRoutes = require("./routes/fileRoutes");
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
@@ -17,6 +18,7 @@ app.use((req, res, next) => {
 app.use(passport.initialize());
 
 app.use("/api/auth", authRoutes);
+app.use("/api/files", fileRoutes);
 
 mongoose
   .connect(process.env.MONGO_URI)
