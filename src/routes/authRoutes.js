@@ -2,7 +2,7 @@ const express = require("express");
 const passport = require("passport");
 const router = express.Router();
 const auth = require("../controllers/authController");
-const { verifyToken, isAdmin } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
 const rateLimit = require('express-rate-limit');
 
 // Rate limiting configurations
@@ -43,12 +43,9 @@ router.get(
   auth.googleCallback,
 );
 
-router.get('/me', verifyToken, auth.getMe);
+router.get('/me', protect, auth.getMe);
 router.post('/resend-otp', auth.resendOtp);
-router.post('/set-password', verifyToken, auth.setPassword);
-router.delete('/account', verifyToken, auth.deleteAccount);
-
-// Admin endpoints
-router.get('/users', verifyToken, isAdmin, auth.getAllUsers);
-
+router.post('/set-password', protect, auth.setPassword);
+router.put('/profile', protect, auth.updateProfile);
+router.delete('/account', protect, auth.deleteAccount);
 module.exports = router;
