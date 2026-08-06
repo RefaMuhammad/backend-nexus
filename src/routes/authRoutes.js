@@ -46,6 +46,8 @@ router.get(
 router.get('/me', protect, auth.getMe);
 router.post('/resend-otp', auth.resendOtp);
 router.post('/set-password', protect, auth.setPassword);
+router.post('/forgot-password', auth.forgotPassword);
+router.post('/reset-password', auth.resetPassword);
 router.put('/profile', protect, auth.updateProfile);
 router.delete('/account', protect, auth.deleteAccount);
 module.exports = router;
