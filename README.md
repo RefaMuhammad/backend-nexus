@@ -123,3 +123,11 @@ This is the backend for the Nexus application, built with Express.js and MongoDB
    GOOGLE_CALLBACK_URL=http://localhost:5000/api/auth/google/callback
    ```
 4. Jalankan aplikasi menggunakan `npm start` atau `npm run dev` (dengan nodemon).
+
+---
+
+## Recent Updates
+
+- **Project Endpoints Security**: Endpoint `/api/projects` sekarang telah dilindungi oleh middleware `protect` (JWT Token). Pengguna tidak perlu lagi mengirimkan `ownerId` di dalam request body. Sistem akan secara otomatis mengambil ID pembuat project (`req.user.id`) langsung dari JWT Token yang dikirimkan melalui header `Authorization: Bearer <token>`.
+- **Complete Request Bodies**: Penambahan validasi `fullName` yang diwajibkan saat registrasi.
+- **Local MongoDB Setup**: Konfigurasi koneksi MongoDB secara default di `.env.example` disesuaikan untuk dijalankan secara lokal (menggunakan `127.0.0.1` daripada `mongo`).
