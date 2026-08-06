@@ -3,14 +3,22 @@ const router = express.Router();
 const {
   createProject,
   getProjects,
-  softDeleteProject,
+  getProjectById,
   updateProject,
-} = require("../controllers/projectController");
-const { protect } = require("../middleware/authMiddleware");
+  moveToTrash,
+  restoreProject,
+  deleteProject,
+} = require('../controllers/projectController');
+const { protect } = require('../middleware/authMiddleware');
 
-router.post("/", protect, createProject);
-router.get("/", protect, getProjects);
-router.put("/:id", protect, updateProject);
-router.delete("/:id", protect, softDeleteProject);
+router.use(protect);
+
+router.post('/', createProject);
+router.get('/', getProjects);
+router.get('/:id', getProjectById);
+router.put('/:id', updateProject);
+router.patch('/:id/trash', moveToTrash);
+router.patch('/:id/restore', restoreProject);
+router.delete('/:id', deleteProject);
 
 module.exports = router;

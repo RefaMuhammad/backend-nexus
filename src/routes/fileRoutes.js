@@ -1,10 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const fileController = require("../controllers/fileController");
-const { verifyToken } = require("../middleware/authMiddleware");
+const { protect } = require('../middleware/authMiddleware');
 
-// Middleware autentikasi untuk semua route files
-// router.use(verifyToken);
+router.use(protect);
 
 // File CRUD Routes
 router.post("/", fileController.createFile);

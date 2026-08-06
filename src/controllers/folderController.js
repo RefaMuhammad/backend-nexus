@@ -1,9 +1,31 @@
 const Folder = require("../models/Folder");
+const File = require("../models/File");
+
+// Helper function untuk mencari semua ID folder dan sub-folder secara rekursif
+const getAllSubFolderIds = async (folderId) => {
+  let folderIds = [folderId];
+  let currentParents = [folderId];
+
+  while (currentParents.length > 0) {
+    const children = await Folder.find({ parentFolderId: { $in: currentParents } }).select("_id");
+    if (children.length === 0) break;
+    currentParents = children.map((c) => c._id);
+    folderIds = folderIds.concat(currentParents);
+  }
+
+  return folderIds;
+};
 
 exports.createFolder = async (req, res) => {
   try {
-    const { projectId, parentFolderId, name, color } = req.body;
-    const userId = req.user ? req.user._id : req.body.createdBy;
+    const { projectId, parentFolderId, name, color, createdBy } = req.body;
+    const userId = req.user?.id || req.user?._id || createdBy;
+
+    if (!userId) {
+      return res.status(401).json({
+        message: "Unauthenticated user (Please include a JWT Token in Header or createdBy in Body)",
+      });
+    }
 
     let path = `/${name}`;
     let level = 1;
@@ -89,13 +111,17 @@ exports.getFolderById = async (req, res) => {
   }
 };
 
+// Move Folder to Trash (Cascades to subfolders & files)
 exports.moveToTrash = async (req, res) => {
   try {
     const { id } = req.params;
+    const now = new Date();
+
+    const targetFolderIds = await getAllSubFolderIds(id);
 
     const folder = await Folder.findByIdAndUpdate(
       id,
-      { status: "trash", deletedAt: new Date() },
+      { status: "trash", deletedAt: now },
       { new: true }
     );
 
@@ -103,15 +129,29 @@ exports.moveToTrash = async (req, res) => {
       return res.status(404).json({ message: "Folder not found" });
     }
 
-    return res.status(200).json({ message: "Folder moved to trash", data: folder });
+    // Update status seluruh subfolder & file di dalamnya
+    await Folder.updateMany(
+      { _id: { $in: targetFolderIds } },
+      { status: "trash", deletedAt: now }
+    );
+
+    await File.updateMany(
+      { folderId: { $in: targetFolderIds } },
+      { status: "trash", deletedAt: now }
+    );
+
+    return res.status(200).json({ message: "Folder and contained items moved to trash", data: folder });
   } catch (error) {
     return res.status(500).json({ message: "Failed to move folder to trash", error: error.message });
   }
 };
 
+// Restore Folder from Trash (Cascades to subfolders & files)
 exports.restoreFolder = async (req, res) => {
   try {
     const { id } = req.params;
+
+    const targetFolderIds = await getAllSubFolderIds(id);
 
     const folder = await Folder.findByIdAndUpdate(
       id,
@@ -123,20 +163,34 @@ exports.restoreFolder = async (req, res) => {
       return res.status(404).json({ message: "Folder not found" });
     }
 
-    return res.status(200).json({ message: "Folder restored successfully", data: folder });
+    // Restore status seluruh subfolder & file di dalamnya
+    await Folder.updateMany(
+      { _id: { $in: targetFolderIds } },
+      { status: "active", deletedAt: null }
+    );
+
+    await File.updateMany(
+      { folderId: { $in: targetFolderIds } },
+      { status: "active", deletedAt: null }
+    );
+
+    return res.status(200).json({ message: "Folder and contained items restored successfully", data: folder });
   } catch (error) {
     return res.status(500).json({ message: "Failed to restore folder", error: error.message });
   }
 };
 
+// Permanently Delete Folder (Cascades to subfolders & files)
 exports.deleteFolder = async (req, res) => {
   try {
     const { id } = req.params;
+    const now = new Date();
 
-    
+    const targetFolderIds = await getAllSubFolderIds(id);
+
     const folder = await Folder.findByIdAndUpdate(
       id,
-      { status: "deleted", deletedAt: new Date() },
+      { status: "deleted", deletedAt: now },
       { new: true }
     );
 
@@ -144,7 +198,18 @@ exports.deleteFolder = async (req, res) => {
       return res.status(404).json({ message: "Folder not found" });
     }
 
-    return res.status(200).json({ message: "Folder permanently deleted", data: folder });
+    // Mark status seluruh subfolder & file di dalamnya sebagai 'deleted'
+    await Folder.updateMany(
+      { _id: { $in: targetFolderIds } },
+      { status: "deleted", deletedAt: now }
+    );
+
+    await File.updateMany(
+      { folderId: { $in: targetFolderIds } },
+      { status: "deleted", deletedAt: now }
+    );
+
+    return res.status(200).json({ message: "Folder and contained items permanently deleted", data: folder });
   } catch (error) {
     return res.status(500).json({ message: "Failed to delete folder", error: error.message });
   }
