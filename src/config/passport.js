@@ -33,6 +33,10 @@ passport.use(
           email,
           googleId: profile.id,
           isVerified: true,
+          profile: {
+            fullName: profile.displayName || "New User",
+            avatarUrl: (profile.photos && profile.photos.length > 0) ? profile.photos[0].value : ""
+          }
         });
         return done(null, user);
       } catch (err) {

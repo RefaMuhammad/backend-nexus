@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 
 const User = require('../models/User');
 
-exports.verifyToken = (req, res, next) => {
+const protect = (req, res, next) => {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
     req.user = null;
@@ -19,14 +19,5 @@ exports.verifyToken = (req, res, next) => {
   }
 };
 
-exports.isAdmin = async (req, res, next) => {
-  try {
-    const user = await User.findById(req.user.id);
-    if (!user || user.role !== 'admin') {
-      return res.status(403).json({ message: 'Akses ditolak. Memerlukan hak akses admin.' });
-    }
-    next();
-  } catch (err) {
-    return res.status(500).json({ message: 'Server error', error: err.message });
-  }
-};
+exports.protect = protect;
+exports.verifyToken = protect;
