@@ -47,6 +47,11 @@ const folderSchema = new mongoose.Schema(
       ref: "User",
       required: [true, "createdBy is required"],
     },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     status: {
       type: String,
       enum: {

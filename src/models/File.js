@@ -14,10 +14,15 @@
         default: null,
         index: true,
       },
-      uploaderId: {
+      createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
         required: true,
+      },
+      updatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
       },
       fileName: {
         type: String,

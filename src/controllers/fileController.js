@@ -16,18 +16,18 @@ exports.createFile = async (req, res) => {
       previousVersionId,
     } = req.body;
 
-    const uploaderId = req.user?.id || req.user?._id || req.body.uploaderId;
+    const createdBy = req.user?.id || req.user?._id || req.body.createdBy;
 
-    if (!uploaderId) {
+    if (!createdBy) {
       return res.status(401).json({
-        message: "Pengguna tidak terautentikasi (Silakan sertakan Token JWT pada Header atau uploaderId pada Body)",
+        message: "Pengguna tidak terautentikasi (Silakan sertakan Token JWT pada Header atau createdBy pada Body)",
       });
     }
 
     const newFile = new File({
       projectId,
       folderId: folderId || null,
-      uploaderId,
+      createdBy,
       fileName,
       originalName,
       fileType,
@@ -46,7 +46,7 @@ exports.createFile = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({
-      message: "Gagal menyimpan file",
+      message: "Failed to create file metadata",
       error: error.message,
     });
   }
@@ -82,7 +82,7 @@ exports.getFiles = async (req, res) => {
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate("uploaderId", "email");
+      .populate("createdBy", "name email");
 
     const total = await File.countDocuments(filter);
 
@@ -108,7 +108,8 @@ exports.getFileById = async (req, res) => {
   try {
     const { id } = req.params;
     const file = await File.findById(id)
-      .populate("uploaderId", "email")
+      .populate("createdBy", "name email")
+      .populate("updatedBy", "name email")
       .populate("previousVersionId");
 
     if (!file || file.status === "deleted") {
@@ -140,7 +141,7 @@ exports.getFilesByProject = async (req, res) => {
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate("uploaderId", "email");
+      .populate("createdBy", "name email");
 
     const total = await File.countDocuments(filter);
 
@@ -180,7 +181,7 @@ exports.getFilesByFolder = async (req, res) => {
       .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate("uploaderId", "email");
+      .populate("createdBy", "name email");
 
     const total = await File.countDocuments(filter);
 
@@ -201,15 +202,21 @@ exports.getFilesByFolder = async (req, res) => {
   }
 };
 
-// Update File Metadata (rename / move folder)
+// Update File Metadata (rename / move folder / updatedBy)
 exports.updateFile = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fileName, folderId } = req.body;
+    const { fileName, folderId, updatedBy } = req.body;
 
     const file = await File.findById(id);
     if (!file || file.status !== "active") {
       return res.status(404).json({ message: "File not found or not active" });
+    }
+
+    // Set attribute updatedBy dengan user yang melakukan update (dari token JWT atau body)
+    const updaterId = req.user?.id || req.user?._id || updatedBy;
+    if (updaterId) {
+      file.updatedBy = updaterId;
     }
 
     if (fileName !== undefined) file.fileName = fileName;
@@ -239,10 +246,12 @@ exports.createFileVersion = async (req, res) => {
       return res.status(404).json({ message: "Original file not found" });
     }
 
+    const creatorId = req.user?.id || req.user?._id;
+
     const newVersionFile = new File({
       projectId: existingFile.projectId,
       folderId: existingFile.folderId,
-      uploaderId: req.user.id,
+      createdBy: creatorId || existingFile.createdBy,
       fileName: fileName || existingFile.fileName,
       originalName: originalName || existingFile.originalName,
       fileType: fileType || existingFile.fileType,
