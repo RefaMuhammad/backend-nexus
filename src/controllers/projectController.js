@@ -2,13 +2,16 @@ const Project = require("../models/Projects");
 
 exports.createProject = async (req, res) => {
   try {
-    const { name, description, ownerId, members } = req.body;
+    const { name, description, members } = req.body;
+    const ownerId = req.user.id;
 
     const project = new Project({
       name,
       description,
       ownerId,
-      members: members || [{ userId: ownerId, role: "owner", joinedAt: new Date() }],
+      members: members || [
+        { userId: ownerId, role: "owner", joinedAt: new Date() },
+      ],
     });
 
     await project.save();
@@ -38,12 +41,19 @@ exports.softDeleteProject = async (req, res) => {
     const project = await Project.findByIdAndUpdate(
       id,
       { isDeleted: true, deletedAt: new Date() },
-      { new: true }
+      { new: true },
     );
 
-    if (!project) return res.status(404).json({ success: false, message: "Project not found" });
+    if (!project)
+      return res
+        .status(404)
+        .json({ success: false, message: "Project not found" });
 
-    res.status(200).json({ success: true, message: "Project successfully deleted", data: project });
+    res.status(200).json({
+      success: true,
+      message: "Project successfully deleted",
+      data: project,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -57,17 +67,26 @@ exports.updateProject = async (req, res) => {
 
     const project = await Project.findOne({ _id: id, isDeleted: false });
     if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Project not found" });
     }
 
     if (name !== undefined) project.name = name;
     if (description !== undefined) project.description = description;
 
     await project.save();
-    res.status(200).json({ success: true, message: "Project successfully updated", data: project });
+    res.status(200).json({
+      success: true,
+      message: "Project successfully updated",
+      data: project,
+    });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ success: false, message: "A project with this name already exists for this owner" });
+      return res.status(400).json({
+        success: false,
+        message: "A project with this name already exists for this owner",
+      });
     }
     res.status(500).json({ success: false, message: error.message });
   }
