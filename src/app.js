@@ -5,6 +5,7 @@ const cors = require("cors");
 const passport = require("./config/passport");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
+const folderRoutes = require("./routes/folderRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 
 const app = express();
@@ -29,6 +30,7 @@ app.use(passport.initialize());
 
 // Mounting Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/folders", folderRoutes);
 app.use("/api/projects", projectRoutes);
 
 // Jalankan Server setelah memanggil connectDB()
