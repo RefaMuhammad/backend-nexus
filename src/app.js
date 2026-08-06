@@ -5,6 +5,7 @@ const cors = require("cors");
 const passport = require("./config/passport");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
+const fileRoutes = require("./routes/fileRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 
@@ -30,6 +31,7 @@ app.use(passport.initialize());
 
 // Mounting Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/files", fileRoutes);
 app.use("/api/folders", folderRoutes);
 app.use("/api/projects", projectRoutes);
 
