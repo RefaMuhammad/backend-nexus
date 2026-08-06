@@ -3,6 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const passport = require("./config/passport");
+const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 
@@ -23,17 +24,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// Inisialisasi Passport JS
 app.use(passport.initialize());
 
+// Mounting Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/projects", projectRoutes);
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.error(err));
-
+// Jalankan Server setelah memanggil connectDB()
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
+
+const startServer = async () => {
+  try {
+    // Panggil fungsi koneksi database dari config/db.js
+    await connectDB();
+
+    // Jalankan server Express
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
+
+// mongoose
+//   .connect(process.env.MONGO_URI)
+//   .then(() => console.log("MongoDB connected"))
+//   .catch((err) => console.error(err));
+
+// const PORT = process.env.PORT || 5000;
+// app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
