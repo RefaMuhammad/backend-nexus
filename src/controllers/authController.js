@@ -104,7 +104,7 @@ exports.verifyOtp = async (req, res) => {
     if (onboarding) {
       user.onboarding.role = typeof onboarding.role === 'string' ? onboarding.role.trim() : '';
       user.onboarding.teamSize = typeof onboarding.teamSize === 'string' ? onboarding.teamSize.trim() : '';
-      user.onboarding.primaryGoal = typeof onboarding.primaryGoal === 'string' ? onboarding.primaryGoal.trim() : '';
+      user.onboarding.industry = typeof onboarding.industry === 'string' ? onboarding.industry.trim() : '';
     }
     
     // Set status onboarding telah selesai
@@ -376,6 +376,54 @@ exports.updateProfile = async (req, res) => {
     });
   } catch (err) {
     console.error("[PROFILE UPDATE ERROR]:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
+  }
+};
+
+// fungsi change password di profile
+exports.changePassword = async (req, res) => {
+  let { currentPassword, newPassword } = req.body;
+
+  if (!currentPassword || typeof currentPassword !== 'string' || !newPassword || typeof newPassword !== 'string') {
+    return res.status(400).json({ message: "Password saat ini dan password baru harus diisi" });
+  }
+
+  currentPassword = currentPassword.trim();
+  newPassword = newPassword.trim();
+
+  if (!isValidPassword(newPassword)) {
+    return res.status(400).json({
+      message: "Password baru tidak memenuhi syarat keamanan (minimal 8 karakter, mengandung huruf besar, kecil, angka, dan karakter spesial)"
+    });
+  }
+
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: "User tidak ditemukan" });
+
+    // Cek jika akun SSO dan belum memiliki password
+    if (!user.passwordHash) {
+      return res.status(400).json({ message: "Akun Anda belum memiliki password. Silakan gunakan fitur Set Password terlebih dahulu" });
+    }
+
+    // Verifikasi password saat ini
+    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Password saat ini salah" });
+    }
+
+    // Mencegah penggunaan password yang sama dengan password saat ini
+    const isSame = await bcrypt.compare(newPassword, user.passwordHash);
+    if (isSame) {
+      return res.status(400).json({ message: "Password baru tidak boleh sama dengan password saat ini" });
+    }
+
+    // Hash dan simpan password baru
+    user.passwordHash = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    res.json({ message: "Password berhasil diubah" });
+  } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
