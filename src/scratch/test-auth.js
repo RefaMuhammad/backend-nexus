@@ -112,7 +112,7 @@ async function runTests() {
       onboarding: {
         role: "Data Analyst",
         teamSize: "1-5",
-        primaryGoal: "Build a portfolio and get my first job"
+        industry: "Education"
       }
     });
     console.log("Response Status:", verifyRes.status);
@@ -163,6 +163,106 @@ async function runTests() {
     console.log("Response Body:", updateShortRes.body);
     if (updateShortRes.status !== 400) throw new Error("Update profil dengan nama pendek harusnya gagal");
     console.log("✓ Validasi panjang nama 2-50 karakter terbukti bekerja!");
+
+    // 6.6. Uji Coba Change Password
+    console.log("\n[TEST 5.3] Changing password with invalid current password (should fail 400)...");
+    const changeFailRes = await apiRequest("POST", "/api/auth/change-password", {
+      currentPassword: "WrongPassword!",
+      newPassword: "NewPassword123!"
+    }, token);
+    console.log("Response Status (Expected 400):", changeFailRes.status);
+    console.log("Response Body:", changeFailRes.body);
+    if (changeFailRes.status !== 400) throw new Error("Harus gagal jika current password salah");
+
+    console.log("\n[TEST 5.4] Changing password with weak new password (should fail 400)...");
+    const changeWeakRes = await apiRequest("POST", "/api/auth/change-password", {
+      currentPassword: testPassword,
+      newPassword: "123"
+    }, token);
+    console.log("Response Status (Expected 400):", changeWeakRes.status);
+    console.log("Response Body:", changeWeakRes.body);
+    if (changeWeakRes.status !== 400) throw new Error("Harus gagal jika password baru terlalu lemah");
+
+    console.log("\n[TEST 5.5] Changing password with valid credentials...");
+    const newPasswordVal = "NewPassword123!";
+    const changeSuccessRes = await apiRequest("POST", "/api/auth/change-password", {
+      currentPassword: testPassword,
+      newPassword: newPasswordVal
+    }, token);
+    console.log("Response Status:", changeSuccessRes.status);
+    console.log("Response Body:", changeSuccessRes.body);
+    if (changeSuccessRes.status !== 200) throw new Error("Gagal mengubah password");
+
+    console.log("\n[TEST 5.6] Trying to login with the old password (should fail)...");
+    const oldLoginRes = await apiRequest("POST", "/api/auth/login", {
+      email: testEmail,
+      password: testPassword,
+    });
+    console.log("Response Status (Expected 400):", oldLoginRes.status);
+    if (oldLoginRes.status !== 400) throw new Error("Harusnya login dengan password lama gagal");
+
+    console.log("\n[TEST 5.7] Logging in with the new password...");
+    const newLoginRes = await apiRequest("POST", "/api/auth/login", {
+      email: testEmail,
+      password: newPasswordVal,
+    });
+    console.log("Response Status:", newLoginRes.status);
+    if (newLoginRes.status !== 200 || !newLoginRes.body.token) throw new Error("Gagal login dengan password baru");
+    let activeToken = newLoginRes.body.token;
+    console.log("✓ Login dengan password baru sukses!");
+
+    // 6.7. Uji Coba Forgot Password & Reset Password
+    console.log("\n[TEST 5.8] Requesting password reset OTP...");
+    const forgotRes = await apiRequest("POST", "/api/auth/forgot-password", {
+      email: testEmail
+    });
+    console.log("Response Status:", forgotRes.status);
+    console.log("Response Body:", forgotRes.body);
+    if (forgotRes.status !== 200) throw new Error("Gagal merequest forgot password");
+
+    // Ambil OTP reset di DB
+    const resetOtpRecord = await Otp.findOne({ email: testEmail, type: "password_reset" });
+    if (!resetOtpRecord) throw new Error("OTP password reset tidak ditemukan di database");
+    console.log("✓ OTP Reset Password ditemukan di DB:", resetOtpRecord.code);
+
+    console.log("\n[TEST 5.9] Resetting password with weak new password (should fail 400)...");
+    const resetWeakRes = await apiRequest("POST", "/api/auth/reset-password", {
+      email: testEmail,
+      code: resetOtpRecord.code,
+      newPassword: "123"
+    });
+    console.log("Response Status (Expected 400):", resetWeakRes.status);
+    if (resetWeakRes.status !== 400) throw new Error("Reset password lemah harusnya gagal");
+
+    console.log("\n[TEST 5.10] Resetting password with wrong OTP (should fail 400)...");
+    const resetWrongOtpRes = await apiRequest("POST", "/api/auth/reset-password", {
+      email: testEmail,
+      code: "999999",
+      newPassword: "ResetPassword123!"
+    });
+    console.log("Response Status (Expected 400):", resetWrongOtpRes.status);
+    if (resetWrongOtpRes.status !== 400) throw new Error("Reset password dengan OTP salah harusnya gagal");
+
+    console.log("\n[TEST 5.11] Resetting password with valid details...");
+    const resetPasswordVal = "ResetPassword123!";
+    const resetSuccessRes = await apiRequest("POST", "/api/auth/reset-password", {
+      email: testEmail,
+      code: resetOtpRecord.code,
+      newPassword: resetPasswordVal
+    });
+    console.log("Response Status:", resetSuccessRes.status);
+    console.log("Response Body:", resetSuccessRes.body);
+    if (resetSuccessRes.status !== 200) throw new Error("Gagal mereset password");
+
+    console.log("\n[TEST 5.12] Logging in with the reset password...");
+    const resetLoginRes = await apiRequest("POST", "/api/auth/login", {
+      email: testEmail,
+      password: resetPasswordVal,
+    });
+    console.log("Response Status:", resetLoginRes.status);
+    if (resetLoginRes.status !== 200 || !resetLoginRes.body.token) throw new Error("Gagal login dengan password hasil reset");
+    activeToken = resetLoginRes.body.token;
+    console.log("✓ Login dengan password baru hasil reset sukses!");
 
     // 7. Cleanup
     console.log("\n[TEST 6] Cleaning up test user...");

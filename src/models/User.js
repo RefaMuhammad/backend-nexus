@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
-      match: [/.+\@.+\..+/, "Format email tidak valid"],
+      match: [/.+\@.+\..+/, 'Format email tidak valid'],
     },
     passwordHash: {
       type: String,
@@ -28,16 +28,16 @@ const userSchema = new mongoose.Schema(
         required: true,
         minlength: 2,
         maxlength: 50,
-        default: "New User",
+        default: 'New User',
       },
       roleTitle: {
         type: String,
         maxlength: 50,
-        default: "",
+        default: '',
       },
       avatarUrl: {
         type: String,
-        default: "",
+        default: '',
       },
     },
     onboarding: {
@@ -48,15 +48,15 @@ const userSchema = new mongoose.Schema(
       },
       role: {
         type: String,
-        default: "",
+        default: '',
       },
       teamSize: {
         type: String,
-        default: "",
+        default: '',
       },
-      primaryGoal: {
+      industry: {
         type: String,
-        default: "",
+        default: '',
       },
     },
     storage: {
@@ -76,19 +76,33 @@ const userSchema = new mongoose.Schema(
       plan: {
         type: String,
         required: true,
-        enum: ["Free", "Standard", "Premium"],
-        default: "Free",
+        enum: ['Free', 'Standard', 'Premium'],
+        default: 'Free',
       },
       status: {
         type: String,
         required: true,
-        enum: ["active", "expired"],
-        default: "active",
+        enum: ['active', 'expired'],
+        default: 'active',
       },
     },
+    // Audit Trail: Who
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    updatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
   },
-  { timestamps: true }
+
+  {
+    // Audit Trail: When (Otomatis generate createdAt & updatedAt)
+    timestamps: true,
+  },
 );
 
-module.exports = mongoose.model("User", userSchema);
-
+module.exports = mongoose.model('User', userSchema);
