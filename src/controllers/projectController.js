@@ -97,7 +97,10 @@ exports.deleteProject = async (req, res) => {
       { new: true }
     );
 
-    if (!project) return res.status(404).json({ success: false, message: "Project not found" });
+    if (!project)
+      return res
+        .status(404)
+        .json({ success: false, message: "Project not found" });
 
     // Cascade: soft-delete all folders and files that belong to this project
     await Folder.updateMany(
@@ -127,7 +130,9 @@ exports.updateProject = async (req, res) => {
 
     const project = await Project.findOne({ _id: id, isDeleted: false });
     if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "Project not found" });
     }
 
     // Set updatedBy with the user who performed the update
@@ -140,7 +145,11 @@ exports.updateProject = async (req, res) => {
     if (description !== undefined) project.description = description;
 
     await project.save();
-    res.status(200).json({ success: true, message: "Project successfully updated", data: project });
+    res.status(200).json({
+      success: true,
+      message: "Project successfully updated",
+      data: project,
+    });
   } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({ success: false, message: "You already have an active project with this name" });
