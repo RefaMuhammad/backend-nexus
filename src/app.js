@@ -9,6 +9,7 @@ const fileRoutes = require("./routes/fileRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const teamRoutes = require("./routes/teamRoutes");
+const trashRoutes = require("./routes/trashRoutes");
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
@@ -36,6 +37,7 @@ app.use("/api/files", fileRoutes);
 app.use("/api/folders", folderRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api", teamRoutes);
+app.use("/api/trash", trashRoutes);
 
 // Jalankan Server setelah memanggil connectDB()
 const PORT = process.env.PORT || 5000;
