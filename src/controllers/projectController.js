@@ -55,7 +55,18 @@ exports.createProject = async (req, res) => {
 // Get all active projects (Excludes soft-deleted ones)
 exports.getProjects = async (req, res) => {
   try {
-    const projects = await Project.find({ isDeleted: false })
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const projects = await Project.find({
+      isDeleted: false,
+      $or: [
+        { createdBy: userId },
+        { "members.userId": userId }
+      ]
+    })
       .populate("createdBy", "name email")
       .populate("updatedBy", "name email")
       .populate("members.userId", "name email");
@@ -70,6 +81,12 @@ exports.getProjects = async (req, res) => {
 exports.getProjectById = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
     const project = await Project.findOne({ _id: id, isDeleted: false })
       .populate("createdBy", "name email")
       .populate("updatedBy", "name email")
@@ -79,89 +96,51 @@ exports.getProjectById = async (req, res) => {
       return res.status(404).json({ success: false, message: "Project not found" });
     }
 
+    const isMember =
+      project.createdBy.toString() === userId ||
+      project.members.some((m) => m.userId?._id?.toString() === userId || m.userId?.toString() === userId);
+
+    if (!isMember) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
     res.status(200).json({ success: true, data: project });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// Move Project to Trash (Cascades to Folders and Files)
-exports.moveToTrash = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const now = new Date();
-
-    const project = await Project.findByIdAndUpdate(
-      id,
-      { status: "trash", isDeleted: true, deletedAt: now },
-      { new: true }
-    );
-
-    if (!project) return res.status(404).json({ success: false, message: "Project not found" });
-
-    // Cascading update: Ubah status folder dan file di bawah project ini menjadi 'trash'
-    await Folder.updateMany(
-      { projectId: id },
-      { status: "trash", deletedAt: now }
-    );
-    await File.updateMany(
-      { projectId: id },
-      { status: "trash", deletedAt: now }
-    );
-
-    res.status(200).json({ success: true, message: "Project, folders, and files moved to trash", data: project });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Restore Project from Trash (Cascades to Folders and Files)
-exports.restoreProject = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const project = await Project.findByIdAndUpdate(
-      id,
-      { status: "active", isDeleted: false, deletedAt: null },
-      { new: true }
-    );
-
-    if (!project) return res.status(404).json({ success: false, message: "Project not found" });
-
-    // Cascading restore: Restore status folder dan file di bawah project ini menjadi 'active'
-    await Folder.updateMany(
-      { projectId: id },
-      { status: "active", deletedAt: null }
-    );
-    await File.updateMany(
-      { projectId: id },
-      { status: "active", deletedAt: null }
-    );
-
-    res.status(200).json({ success: true, message: "Project, folders, and files successfully restored", data: project });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Permanently Delete Project (Cascades to Folders and Files)
+// Delete Project (Soft Delete — cascades to Folders and Files)
 exports.deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const project = await Project.findById(id);
+    if (!project) {
+      return res.status(404).json({ success: false, message: "Project not found" });
+    }
+
+    const isMember =
+      project.createdBy.toString() === userId ||
+      project.members.some((m) => m.userId.toString() === userId);
+
+    if (!isMember) {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
     const now = new Date();
+    project.status = "deleted";
+    project.isDeleted = true;
+    project.deletedAt = now;
+    project.updatedBy = userId;
+    await project.save();
 
-    const project = await Project.findByIdAndUpdate(
-      id,
-      { status: "deleted", isDeleted: true, deletedAt: now },
-      { new: true }
-    );
-
-    if (!project)
-      return res
-        .status(404)
-        .json({ success: false, message: "Project not found" });
-
-    // Cascading hard delete/mark status: Set status folder dan file di bawah project menjadi 'deleted'
+    // Cascade: soft-delete all folders and files that belong to this project
     await Folder.updateMany(
       { projectId: id },
       { status: "deleted", deletedAt: now }
@@ -171,7 +150,11 @@ exports.deleteProject = async (req, res) => {
       { status: "deleted", deletedAt: now }
     );
 
-    res.status(200).json({ success: true, message: "Project, folders, and files permanently deleted", data: project });
+    res.status(200).json({
+      success: true,
+      message: "Project, folders, and files have been deleted",
+      data: project,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -181,20 +164,27 @@ exports.deleteProject = async (req, res) => {
 exports.updateProject = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, updatedBy } = req.body;
+    const { name, description } = req.body;
+    const userId = req.user?.id || req.user?._id;
+
+    if (!userId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
 
     const project = await Project.findOne({ _id: id, isDeleted: false });
     if (!project) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Project not found" });
+      return res.status(404).json({ success: false, message: "Project not found" });
     }
 
-    // Set updatedBy with the user who performed the update
-    const updaterId = req.user?.id || req.user?._id || updatedBy;
-    if (updaterId) {
-      project.updatedBy = updaterId;
+    const isMember =
+      project.createdBy.toString() === userId ||
+      project.members.some((m) => m.userId.toString() === userId);
+
+    if (!isMember) {
+      return res.status(403).json({ success: false, message: "Access denied" });
     }
+
+    project.updatedBy = userId;
 
     if (name !== undefined) project.name = name;
     if (description !== undefined) project.description = description;

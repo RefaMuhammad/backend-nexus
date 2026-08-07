@@ -5,8 +5,7 @@ const User = require('../models/User');
 const protect = (req, res, next) => {
   const header = req.headers.authorization;
   if (!header || !header.startsWith('Bearer ')) {
-    req.user = null;
-    return next();
+    return res.status(401).json({ message: 'Token tidak ditemukan atau format tidak valid' });
   }
 
   try {
