@@ -253,6 +253,11 @@ exports.getMe = async (req, res) => {
     // Hapus hash password sebelum dikirim demi alasan keamanan
     delete userObj.passwordHash;
 
+    // Sinkronisasi/Default roleTitle ke onboarding.role jika di profile masih kosong
+    if (!userObj.profile.roleTitle && userObj.onboarding?.role) {
+      userObj.profile.roleTitle = userObj.onboarding.role;
+    }
+
     res.json({
       user: {
         email: userObj.email,
@@ -348,7 +353,7 @@ exports.setPassword = async (req, res) => {
 
 // Edit Profile
 exports.updateProfile = async (req, res) => {
-  const { fullName, roleTitle } = req.body;
+  const { fullName, roleTitle, avatarUrl, role, industry, teamSize } = req.body;
 
   // Validasi panjang nama (2-50 karakter - NEX-089)
   if (!fullName || typeof fullName !== 'string' || fullName.trim().length < 2 || fullName.trim().length > 50) {
@@ -365,14 +370,37 @@ exports.updateProfile = async (req, res) => {
     }
 
     user.profile.fullName = fullName.trim();
-    if (roleTitle !== undefined) {
+    
+    // Update role / roleTitle
+    if (role !== undefined) {
+      const trimmedRole = typeof role === 'string' ? role.trim() : '';
+      user.onboarding.role = trimmedRole;
+      user.profile.roleTitle = trimmedRole; // Sinkronisasi ke profile.roleTitle
+    } else if (roleTitle !== undefined) {
       user.profile.roleTitle = typeof roleTitle === 'string' ? roleTitle.trim() : '';
+      user.onboarding.role = user.profile.roleTitle; // Sinkronisasi ke onboarding.role
+    } else if (!user.profile.roleTitle && user.onboarding?.role) {
+      user.profile.roleTitle = user.onboarding.role;
+    }
+
+    // Update avatarUrl jika disediakan
+    if (avatarUrl !== undefined) {
+      user.profile.avatarUrl = typeof avatarUrl === 'string' ? avatarUrl.trim() : '';
+    }
+
+    // Update onboarding fields jika disediakan
+    if (industry !== undefined) {
+      user.onboarding.industry = typeof industry === 'string' ? industry.trim() : '';
+    }
+    if (teamSize !== undefined) {
+      user.onboarding.teamSize = typeof teamSize === 'string' ? teamSize.trim() : '';
     }
 
     await user.save();
     res.json({
       message: "Profil berhasil diperbarui",
-      profile: user.profile
+      profile: user.profile,
+      onboarding: user.onboarding
     });
   } catch (err) {
     console.error("[PROFILE UPDATE ERROR]:", err);
