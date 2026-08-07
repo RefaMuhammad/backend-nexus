@@ -1,5 +1,6 @@
 const Folder = require("../models/Folder");
 const File = require("../models/File");
+const Project = require("../models/Projects");
 
 // Helper function untuk mencari semua ID folder dan sub-folder secara rekursif
 const getAllSubFolderIds = async (folderId) => {
@@ -27,9 +28,18 @@ exports.createFolder = async (req, res) => {
       });
     }
 
+    // Check project access
+    const project = await Project.findOne({ _id: projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to project" });
+    }
+
     let path = `/${name}`;
     let level = 1;
-
 
     if (parentFolderId) {
       const parentFolder = await Folder.findById(parentFolderId);
@@ -68,7 +78,19 @@ exports.createFolder = async (req, res) => {
 exports.getAllFolders = async (req, res) => {
   try {
     const { status = "active" } = req.query;
-    const filter = status === "all" ? {} : { status };
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Only get folders for projects the user has access to
+    const userProjects = await Project.find({
+      isDeleted: false,
+      $or: [{ createdBy: userId }, { "members.userId": userId }]
+    }).select("_id");
+    const projectIds = userProjects.map(p => p._id);
+
+    const filter = { projectId: { $in: projectIds }, status };
     const folders = await Folder.find(filter).sort({ createdAt: -1 });
     return res.status(200).json({ data: folders });
   } catch (error) {
@@ -80,6 +102,19 @@ exports.getFoldersByProject = async (req, res) => {
   try {
     const { projectId } = req.params;
     const { status = "active", parentFolderId } = req.query;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const project = await Project.findOne({ _id: projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to project" });
+    }
 
     const filter = { projectId };
     if (status !== "all") {
@@ -99,10 +134,23 @@ exports.getFoldersByProject = async (req, res) => {
 exports.getFolderById = async (req, res) => {
   try {
     const { id } = req.params;
-    const folder = await Folder.findById(id);
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    if (!folder) {
+    const folder = await Folder.findById(id);
+    if (!folder || folder.status === "deleted") {
       return res.status(404).json({ message: "Folder not found" });
+    }
+
+    const project = await Project.findOne({ _id: folder.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to folder's project" });
     }
 
     return res.status(200).json({ data: folder });
@@ -115,19 +163,31 @@ exports.getFolderById = async (req, res) => {
 exports.moveToTrash = async (req, res) => {
   try {
     const { id } = req.params;
-    const now = new Date();
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const targetFolderIds = await getAllSubFolderIds(id);
-
-    const folder = await Folder.findByIdAndUpdate(
-      id,
-      { status: "trash", deletedAt: now },
-      { new: true }
-    );
-
-    if (!folder) {
+    const folder = await Folder.findById(id);
+    if (!folder || folder.status === "deleted") {
       return res.status(404).json({ message: "Folder not found" });
     }
+
+    const project = await Project.findOne({ _id: folder.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to folder's project" });
+    }
+
+    const now = new Date();
+    const targetFolderIds = await getAllSubFolderIds(id);
+
+    folder.status = "trash";
+    folder.deletedAt = now;
+    await folder.save();
 
     // Update status seluruh subfolder & file di dalamnya
     await Folder.updateMany(
@@ -150,18 +210,30 @@ exports.moveToTrash = async (req, res) => {
 exports.restoreFolder = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const targetFolderIds = await getAllSubFolderIds(id);
-
-    const folder = await Folder.findByIdAndUpdate(
-      id,
-      { status: "active", deletedAt: null },
-      { new: true }
-    );
-
+    const folder = await Folder.findById(id);
     if (!folder) {
       return res.status(404).json({ message: "Folder not found" });
     }
+
+    const project = await Project.findOne({ _id: folder.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to folder's project" });
+    }
+
+    const targetFolderIds = await getAllSubFolderIds(id);
+
+    folder.status = "active";
+    folder.deletedAt = null;
+    await folder.save();
 
     // Restore status seluruh subfolder & file di dalamnya
     await Folder.updateMany(
@@ -184,19 +256,31 @@ exports.restoreFolder = async (req, res) => {
 exports.deleteFolder = async (req, res) => {
   try {
     const { id } = req.params;
-    const now = new Date();
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const targetFolderIds = await getAllSubFolderIds(id);
-
-    const folder = await Folder.findByIdAndUpdate(
-      id,
-      { status: "deleted", deletedAt: now },
-      { new: true }
-    );
-
+    const folder = await Folder.findById(id);
     if (!folder) {
       return res.status(404).json({ message: "Folder not found" });
     }
+
+    const project = await Project.findOne({ _id: folder.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to folder's project" });
+    }
+
+    const now = new Date();
+    const targetFolderIds = await getAllSubFolderIds(id);
+
+    folder.status = "deleted";
+    folder.deletedAt = now;
+    await folder.save();
 
     // Mark status seluruh subfolder & file di dalamnya sebagai 'deleted'
     await Folder.updateMany(

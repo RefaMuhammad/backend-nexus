@@ -1,4 +1,6 @@
 const File = require("../models/File");
+const Project = require("../models/Projects");
+const Folder = require("../models/Folder");
 
 // Create / Upload File Metadata
 exports.createFile = async (req, res) => {
@@ -22,6 +24,16 @@ exports.createFile = async (req, res) => {
       return res.status(401).json({
         message: "Pengguna tidak terautentikasi (Silakan sertakan Token JWT pada Header atau createdBy pada Body)",
       });
+    }
+
+    // Check project access
+    const project = await Project.findOne({ _id: projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+    const isMember = project.createdBy.toString() === createdBy || project.members.some(m => m.userId.toString() === createdBy);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to project" });
     }
 
     const newFile = new File({
@@ -65,9 +77,29 @@ exports.getFiles = async (req, res) => {
       limit = 20,
     } = req.query;
 
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    // Only get files for projects the user has access to
+    const userProjects = await Project.find({
+      isDeleted: false,
+      $or: [{ createdBy: userId }, { "members.userId": userId }]
+    }).select("_id");
+    const projectIds = userProjects.map(p => p._id);
+
     const filter = { status };
 
-    if (projectId) filter.projectId = projectId;
+    if (projectId) {
+      if (!projectIds.some(pId => pId.toString() === projectId.toString())) {
+        return res.status(403).json({ message: "Access denied to project" });
+      }
+      filter.projectId = projectId;
+    } else {
+      filter.projectId = { $in: projectIds };
+    }
+
     if (folderId !== undefined) {
       filter.folderId = folderId === "null" || folderId === "" ? null : folderId;
     }
@@ -107,6 +139,11 @@ exports.getFiles = async (req, res) => {
 exports.getFileById = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
     const file = await File.findById(id)
       .populate("createdBy", "name email")
       .populate("updatedBy", "name email")
@@ -114,6 +151,15 @@ exports.getFileById = async (req, res) => {
 
     if (!file || file.status === "deleted") {
       return res.status(404).json({ message: "File not found" });
+    }
+
+    const project = await Project.findOne({ _id: file.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to file's project" });
     }
 
     return res.status(200).json({ data: file });
@@ -130,6 +176,19 @@ exports.getFilesByProject = async (req, res) => {
   try {
     const { projectId } = req.params;
     const { status = "active", category, search, page = 1, limit = 20 } = req.query;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const project = await Project.findOne({ _id: projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied to project" });
+    }
 
     const filter = { projectId, status };
     if (category) filter.category = category;
@@ -167,11 +226,37 @@ exports.getFilesByFolder = async (req, res) => {
   try {
     const { folderId } = req.params;
     const { status = "active", category, search, page = 1, limit = 20 } = req.query;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     // Menangani kasus 'root' folder (folderId === 'null' atau 'root')
     const parsedFolderId = folderId === "null" || folderId === "root" ? null : folderId;
 
     const filter = { folderId: parsedFolderId, status };
+
+    if (parsedFolderId) {
+      const folder = await Folder.findById(parsedFolderId);
+      if (!folder) return res.status(404).json({ message: "Folder not found" });
+      const project = await Project.findOne({ _id: folder.projectId, isDeleted: false });
+      if (!project) return res.status(404).json({ message: "Associated project not found" });
+      const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+      if (!isMember) return res.status(403).json({ message: "Access denied" });
+      filter.projectId = folder.projectId;
+    } else {
+      // If folder is root, they MUST pass projectId in query to identify which project's root folder they want.
+      const { projectId } = req.query;
+      if (!projectId) {
+        return res.status(400).json({ message: "projectId is required when retrieving root folder files" });
+      }
+      const project = await Project.findOne({ _id: projectId, isDeleted: false });
+      if (!project) return res.status(404).json({ message: "Project not found" });
+      const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+      if (!isMember) return res.status(403).json({ message: "Access denied" });
+      filter.projectId = projectId;
+    }
+
     if (category) filter.category = category;
     if (search) filter.fileName = { $regex: search, $options: "i" };
 
@@ -207,14 +292,27 @@ exports.updateFile = async (req, res) => {
   try {
     const { id } = req.params;
     const { fileName, folderId, updatedBy } = req.body;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const file = await File.findById(id);
     if (!file || file.status !== "active") {
       return res.status(404).json({ message: "File not found or not active" });
     }
 
+    const project = await Project.findOne({ _id: file.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" });
+    }
+
     // Set attribute updatedBy dengan user yang melakukan update (dari token JWT atau body)
-    const updaterId = req.user?.id || req.user?._id || updatedBy;
+    const updaterId = userId || updatedBy;
     if (updaterId) {
       file.updatedBy = updaterId;
     }
@@ -240,18 +338,29 @@ exports.createFileVersion = async (req, res) => {
   try {
     const { id } = req.params;
     const { fileName, originalName, fileType, category, sizeBytes, fileUrl } = req.body;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const existingFile = await File.findById(id);
     if (!existingFile || existingFile.status !== "active") {
       return res.status(404).json({ message: "Original file not found" });
     }
 
-    const creatorId = req.user?.id || req.user?._id;
+    const project = await Project.findOne({ _id: existingFile.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" });
+    }
 
     const newVersionFile = new File({
       projectId: existingFile.projectId,
       folderId: existingFile.folderId,
-      createdBy: creatorId || existingFile.createdBy,
+      createdBy: userId || existingFile.createdBy,
       fileName: fileName || existingFile.fileName,
       originalName: originalName || existingFile.originalName,
       fileType: fileType || existingFile.fileType,
@@ -280,10 +389,23 @@ exports.createFileVersion = async (req, res) => {
 exports.moveToTrash = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const file = await File.findById(id);
     if (!file || file.status === "deleted") {
       return res.status(404).json({ message: "File not found" });
+    }
+
+    const project = await Project.findOne({ _id: file.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     file.status = "trash";
@@ -307,10 +429,23 @@ exports.moveToTrash = async (req, res) => {
 exports.restoreFromTrash = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const file = await File.findById(id);
     if (!file || file.status !== "trash") {
       return res.status(400).json({ message: "File not in trash" });
+    }
+
+    const project = await Project.findOne({ _id: file.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     file.status = "active";
@@ -334,10 +469,23 @@ exports.restoreFromTrash = async (req, res) => {
 exports.deleteFile = async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
     const file = await File.findById(id);
     if (!file) {
       return res.status(404).json({ message: "File not found" });
+    }
+
+    const project = await Project.findOne({ _id: file.projectId, isDeleted: false });
+    if (!project) {
+      return res.status(404).json({ message: "Associated project not found" });
+    }
+    const isMember = project.createdBy.toString() === userId || project.members.some(m => m.userId.toString() === userId);
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
     file.status = "deleted";
