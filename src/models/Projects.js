@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 const memberSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    role: { type: String, enum: ["owner", "editor", "viewer"], required: true, default: "editor" },
-    status: { type: String, enum: ["pending", "accepted", "declined"], required: true, default: "pending" },
+    role: { type: String, enum: ["owner", "editor", "viewer"], default: "editor" },
+    status: { type: String, enum: ["pending", "accepted", "declined"], default: "pending" },
     joinedAt: { type: Date, default: Date.now, required: true },
   },
   { _id: false },

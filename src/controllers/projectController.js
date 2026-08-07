@@ -85,66 +85,7 @@ exports.getProjectById = async (req, res) => {
   }
 };
 
-// Move Project to Trash (Cascades to Folders and Files)
-exports.moveToTrash = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const now = new Date();
-
-    const project = await Project.findByIdAndUpdate(
-      id,
-      { status: "trash", isDeleted: true, deletedAt: now },
-      { new: true }
-    );
-
-    if (!project) return res.status(404).json({ success: false, message: "Project not found" });
-
-    // Cascading update: Ubah status folder dan file di bawah project ini menjadi 'trash'
-    await Folder.updateMany(
-      { projectId: id },
-      { status: "trash", deletedAt: now }
-    );
-    await File.updateMany(
-      { projectId: id },
-      { status: "trash", deletedAt: now }
-    );
-
-    res.status(200).json({ success: true, message: "Project, folders, and files moved to trash", data: project });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Restore Project from Trash (Cascades to Folders and Files)
-exports.restoreProject = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    const project = await Project.findByIdAndUpdate(
-      id,
-      { status: "active", isDeleted: false, deletedAt: null },
-      { new: true }
-    );
-
-    if (!project) return res.status(404).json({ success: false, message: "Project not found" });
-
-    // Cascading restore: Restore status folder dan file di bawah project ini menjadi 'active'
-    await Folder.updateMany(
-      { projectId: id },
-      { status: "active", deletedAt: null }
-    );
-    await File.updateMany(
-      { projectId: id },
-      { status: "active", deletedAt: null }
-    );
-
-    res.status(200).json({ success: true, message: "Project, folders, and files successfully restored", data: project });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Permanently Delete Project (Cascades to Folders and Files)
+// Delete Project (Soft Delete — cascades to Folders and Files)
 exports.deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
@@ -158,7 +99,7 @@ exports.deleteProject = async (req, res) => {
 
     if (!project) return res.status(404).json({ success: false, message: "Project not found" });
 
-    // Cascading hard delete/mark status: Set status folder dan file di bawah project menjadi 'deleted'
+    // Cascade: soft-delete all folders and files that belong to this project
     await Folder.updateMany(
       { projectId: id },
       { status: "deleted", deletedAt: now }
@@ -168,7 +109,11 @@ exports.deleteProject = async (req, res) => {
       { status: "deleted", deletedAt: now }
     );
 
-    res.status(200).json({ success: true, message: "Project, folders, and files permanently deleted", data: project });
+    res.status(200).json({
+      success: true,
+      message: "Project, folders, and files have been deleted",
+      data: project,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
