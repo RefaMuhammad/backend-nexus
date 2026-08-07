@@ -110,98 +110,7 @@ exports.getProjectById = async (req, res) => {
   }
 };
 
-// Move Project to Trash (Cascades to Folders and Files)
-exports.moveToTrash = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user?.id || req.user?._id;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    const project = await Project.findOne({ _id: id, isDeleted: false });
-    if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found" });
-    }
-
-    const isMember =
-      project.createdBy.toString() === userId ||
-      project.members.some((m) => m.userId.toString() === userId);
-
-    if (!isMember) {
-      return res.status(403).json({ success: false, message: "Access denied" });
-    }
-
-    const now = new Date();
-    project.status = "trash";
-    project.isDeleted = true;
-    project.deletedAt = now;
-    project.updatedBy = userId;
-    await project.save();
-
-    // Cascading update: Ubah status folder dan file di bawah project ini menjadi 'trash'
-    await Folder.updateMany(
-      { projectId: id },
-      { status: "trash", deletedAt: now }
-    );
-    await File.updateMany(
-      { projectId: id },
-      { status: "trash", deletedAt: now }
-    );
-
-    res.status(200).json({ success: true, message: "Project, folders, and files moved to trash", data: project });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Restore Project from Trash (Cascades to Folders and Files)
-exports.restoreProject = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user?.id || req.user?._id;
-
-    if (!userId) {
-      return res.status(401).json({ success: false, message: "Unauthorized" });
-    }
-
-    const project = await Project.findById(id);
-    if (!project) {
-      return res.status(404).json({ success: false, message: "Project not found" });
-    }
-
-    const isMember =
-      project.createdBy.toString() === userId ||
-      project.members.some((m) => m.userId.toString() === userId);
-
-    if (!isMember) {
-      return res.status(403).json({ success: false, message: "Access denied" });
-    }
-
-    project.status = "active";
-    project.isDeleted = false;
-    project.deletedAt = null;
-    project.updatedBy = userId;
-    await project.save();
-
-    // Cascading restore: Restore status folder dan file di bawah project ini menjadi 'active'
-    await Folder.updateMany(
-      { projectId: id },
-      { status: "active", deletedAt: null }
-    );
-    await File.updateMany(
-      { projectId: id },
-      { status: "active", deletedAt: null }
-    );
-
-    res.status(200).json({ success: true, message: "Project, folders, and files successfully restored", data: project });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-// Permanently Delete Project (Cascades to Folders and Files)
+// Delete Project (Soft Delete — cascades to Folders and Files)
 exports.deleteProject = async (req, res) => {
   try {
     const { id } = req.params;
@@ -231,7 +140,7 @@ exports.deleteProject = async (req, res) => {
     project.updatedBy = userId;
     await project.save();
 
-    // Cascading hard delete/mark status: Set status folder dan file di bawah project menjadi 'deleted'
+    // Cascade: soft-delete all folders and files that belong to this project
     await Folder.updateMany(
       { projectId: id },
       { status: "deleted", deletedAt: now }
@@ -241,7 +150,11 @@ exports.deleteProject = async (req, res) => {
       { status: "deleted", deletedAt: now }
     );
 
-    res.status(200).json({ success: true, message: "Project, folders, and files permanently deleted", data: project });
+    res.status(200).json({
+      success: true,
+      message: "Project, folders, and files have been deleted",
+      data: project,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
