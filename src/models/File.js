@@ -42,18 +42,15 @@
           "xlsx",
           "mp3",
           "m4a",
-          "png",
-          "jpg",
-          "jpeg",
-          "zip",
+          "wav",
           "txt",
-          "other",
+          "md"
         ],
       },
       category: {
         type: String,
         required: true,
-        enum: ["document", "audio", "spreadsheet", "image", "video", "other"],
+        enum: ["document", "audio", "spreadsheet", "prd"],
       },
       sizeBytes: {
         type: Number,
