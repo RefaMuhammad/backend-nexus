@@ -6,6 +6,7 @@ const passport = require("./config/passport");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const fileRoutes = require("./routes/fileRoutes");
+const transcriptRoutes = require("./routes/transcriptRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
@@ -36,6 +37,7 @@ app.use(passport.initialize());
 // Mounting Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/files", fileRoutes);
+app.use("/api/transcripts", transcriptRoutes);
 app.use("/api/folders", folderRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -45,7 +47,6 @@ app.use("/api/trash", trashRoutes);
 
 // Jalankan Server setelah memanggil connectDB()
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 
 const startServer = async () => {
