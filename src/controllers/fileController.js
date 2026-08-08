@@ -52,6 +52,15 @@ exports.createFile = async (req, res) => {
     });
 
     const savedFile = await newFile.save();
+
+    // Sync new file to existing conversations of the project
+    try {
+      const { syncNewFileToConversations } = require("../services/chatService");
+      await syncNewFileToConversations(projectId, savedFile._id);
+    } catch (syncError) {
+      console.error("Failed to sync new file to conversations:", syncError.message);
+    }
+
     return res.status(201).json({
       message: "File berhasil disimpan",
       data: savedFile,
@@ -373,6 +382,15 @@ exports.createFileVersion = async (req, res) => {
     });
 
     const savedFile = await newVersionFile.save();
+
+    // Sync new file version to existing conversations of the project
+    try {
+      const { syncNewFileToConversations } = require("../services/chatService");
+      await syncNewFileToConversations(existingFile.projectId, savedFile._id);
+    } catch (syncError) {
+      console.error("Failed to sync new file version to conversations:", syncError.message);
+    }
+
     return res.status(201).json({
       message: "New file version created successfully",
       data: savedFile,
