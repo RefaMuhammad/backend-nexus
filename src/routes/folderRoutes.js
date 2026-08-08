@@ -5,7 +5,7 @@ const { protect } = require('../middleware/authMiddleware');
 
 router.use(protect);
 
-router.post("/", folderController.createFolder);
+router.post("/",  folderController.createFolder);
 router.get("/", folderController.getAllFolders);
 router.get("/project/:projectId", folderController.getFoldersByProject);
 router.get("/:id", folderController.getFolderById);
