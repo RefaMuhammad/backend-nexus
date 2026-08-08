@@ -6,12 +6,14 @@ const passport = require("./config/passport");
 const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const fileRoutes = require("./routes/fileRoutes");
+const transcriptRoutes = require("./routes/transcriptRoutes");
 const folderRoutes = require("./routes/folderRoutes");
 const projectRoutes = require("./routes/projectRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const teamRoutes = require("./routes/teamRoutes");
 const trashRoutes = require("./routes/trashRoutes");
 const chatRoutes = require("./routes/chatRoutes");
+const documentEmbeddingRoutes = require("./routes/documentEmbeddingRoutes");
 
 const app = express();
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
@@ -36,15 +38,18 @@ app.use(passport.initialize());
 // Mounting Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/files", fileRoutes);
+app.use("/api/transcripts", transcriptRoutes);
 app.use("/api/folders", folderRoutes);
 app.use("/api/projects", projectRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api", teamRoutes);
 app.use("/api/trash", trashRoutes);
 app.use("/api", chatRoutes);
+app.use("/api/document-embeddings", documentEmbeddingRoutes);
 
 // Jalankan Server setelah memanggil connectDB()
 const PORT = process.env.PORT || 5000;
+
 
 const startServer = async () => {
   try {
