@@ -33,4 +33,5 @@ const projectSchema = new mongoose.Schema(
 projectSchema.index({ updatedAt: -1 });
 projectSchema.index({ createdBy: 1, name: 1 }, { unique: true, partialFilterExpression: { isDeleted: false } });
 
+
 module.exports = mongoose.model('Project', projectSchema);
