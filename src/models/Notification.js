@@ -57,7 +57,6 @@ const notificationSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
       default: null,
-      index: true,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
