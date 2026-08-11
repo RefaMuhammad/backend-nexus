@@ -2,19 +2,19 @@ const express = require("express");
 const passport = require("passport");
 const router = express.Router();
 const auth = require("../controllers/authController");
-const { verifyToken, isAdmin } = require('../middleware/authMiddleware');
+const { protect } = require('../middleware/authMiddleware');
 const rateLimit = require('express-rate-limit');
 
 // Rate limiting configurations
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 menit
-  max: 10, // batasi setiap IP maksimal 10 request per windowMs untuk login
+  windowMs: 15 * 60 * 1000, 
+  max: 10, 
   message: { message: 'Terlalu banyak percobaan login, coba lagi setelah 15 menit' },
 });
 
 const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 jam
-  max: 5, // batasi setiap IP maksimal 5 register per jam
+  windowMs: 60 * 60 * 1000, 
+  max: 5, 
   message: { message: 'Terlalu banyak percobaan daftar, coba lagi setelah 1 jam' },
 });
 
@@ -43,12 +43,12 @@ router.get(
   auth.googleCallback,
 );
 
-router.get('/me', verifyToken, auth.getMe);
+router.get('/me', protect, auth.getMe);
 router.post('/resend-otp', auth.resendOtp);
-router.post('/set-password', verifyToken, auth.setPassword);
-router.delete('/account', verifyToken, auth.deleteAccount);
-
-// Admin endpoints
-router.get('/users', verifyToken, isAdmin, auth.getAllUsers);
-
+router.post('/set-password', protect, auth.setPassword);
+router.post('/forgot-password', auth.forgotPassword);
+router.post('/reset-password', auth.resetPassword);
+router.put('/profile', protect, auth.updateProfile);
+router.post('/change-password', protect, auth.changePassword);
+router.delete('/account', protect, auth.deleteAccount);
 module.exports = router;
